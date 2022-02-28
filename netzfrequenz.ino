@@ -71,8 +71,9 @@ void initialize_timer1() {
 }    
 
 void setup() {
+    cli();
     Serial.begin(115200);
-    Serial.print(F("STARTUP"));
+    Serial.println(F("STARTUP"));
 
     delay(1000);
 
@@ -80,14 +81,22 @@ void setup() {
     digitalWrite(input_capture_pin, HIGH);
 
     initialize_timer1();
+    sei();
 }
 
 const uint8_t sample_buffer_size = 50;
 
 uint32_t sample_buffer[sample_buffer_size];
 
+
+long myTimer = 0;
+long myTimeout = 1000;
+
 void loop() {
-    static uint8_t sample_index = 0;
+    static uint8_t sample_index = sample_buffer_size - 1;
+    static uint8_t buffer_filled = sample_buffer_size;
+    static uint8_t ingorefirstvalues = 0;
+    static uint32_t lastValue = 0;
 
     if (next_sample_ready) {
         next_sample_ready = false;
@@ -95,16 +104,25 @@ void loop() {
         cli();
         sample_buffer[sample_index] = period_length;
         sei();
+        
         sample_index = sample_index > 0 ? sample_index - 1 : sample_buffer_size - 1;
-     
-        uint32_t average_period_length = 0;
-        for (uint8_t index = 0; index < sample_buffer_size; ++index) {
-            average_period_length += sample_buffer[index];
-        }
-        average_period_length /= sample_buffer_size;        
 
-        const int64_t deviation_1000 = 1000*(int64_t)F_CPU / average_period_length;
-        Serial.println((int32_t)(deviation_1000 + magic_calibration) / 2);
+        if(ingorefirstvalues < sample_buffer_size){
+          ingorefirstvalues++;
+          return;
+        }
+
+        if (millis() > myTimeout + myTimer ) {
+          myTimer = millis();
+          uint32_t average_period_length = 0;
+          for (uint8_t index = 0; index < sample_buffer_size; ++index) {
+              average_period_length += sample_buffer[index];
+          }
+          average_period_length /= sample_buffer_size;
+
+          const int64_t deviation_1000 = 1000 * (int64_t)F_CPU / average_period_length;
+          Serial.println((int32_t)(deviation_1000 + magic_calibration) / 2);
+        }
     }
 }
 
